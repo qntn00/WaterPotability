@@ -1,6 +1,6 @@
 ---
 title: 'Machine Learning Project: Potability'
-author: "Quentin Le Boulch and Nico Palermo"
+author: "Quentin Le Boulch"
 date: "2024-05-18"
 output:
   html_document:
