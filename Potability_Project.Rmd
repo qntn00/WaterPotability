@@ -1,0 +1,359 @@
+---
+title: 'Machine Learning Project: Potability'
+author: "Quentin Le Boulch and Nico Palermo"
+date: "2024-05-18"
+output:
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_float: true
+  pdf_document:
+    toc: true
+---
+## Introduction
+
+This project aims to analyze water potability using various machine learning techniques applied to a specific dataset. We set up several models to evaluate the prediction capacity of each method and compare their performances.
+We'll see several supervised classification techniques by training set model, tree, random forrest
+logit model and tree nnet models
+
+
+
+
+## Library
+
+We installed several library to perform our different test and models
+```{r include=FALSE}
+
+library(readxl)
+library(summarytools)
+library(corrplot)
+library(caret)
+library(dplyr)
+library(lattice)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+library(readxl)
+library(MASS)
+library(caTools)
+library(ggplot2)
+library(caret)
+library(nnet)
+library(rpart)
+library(rpart.plot) 
+library(tree) 
+library(randomForest)
+library(gbm)
+
+
+```
+
+
+
+
+## 1. Dataset
+
+We download the dataset from Kaggle: https://www.kaggle.com/datasets/nayanack/water-probability/data
+
+The data provides information about whether the water is potable or not, based on various water characteristics variables.
+
+There is 9 explicative variables and the 10th variable is whether the is potable or not:
+
+pH: pH of the water (measured in pH units).
+
+Hardness: Hardness of the water (measured in mg/L).
+
+Solids: Total dissolved solids in the water (measured in ppm).
+
+Chloramines: Amount of chloramines in the water (measured in ppm).
+
+Sulfate: Amount of sulfate in the water (measured in mg/L).
+
+Conductivity: Conductivity of the water (measured in μS/cm).
+
+Organic_carbon: Amount of organic carbon in the water (measured in ppm).
+
+Trihalomethanes: Amount of trihalomethanes in the water (measured in μg/L).
+
+Turbidity: Turbidity of the water (measured in NTU).
+
+Potability: Potability of the water (1 indicates potable, 0 indicates non-potable).
+
+Summary Statistics:
+
+The dataset contains 3276 entries.
+The columns "pH", "Sulfate", and "Trihalomethanes" have missing values.
+The data types of the columns are float64 for features and int64 for the target variable (Potability).
+
+```{r}
+setwd("C:/Users/quent/OneDrive - Université Côte d'Azur/Documents/MasterEE/s2/Big Data")
+
+
+
+ptbl<- read.csv("water_potability.csv")
+
+str(ptbl)
+head(ptbl)
+summary(ptbl)
+```
+
+## 2 Training Model
+
+We create the training model with 3/4 of our data
+We create the test set to test our model. The test set is composed by the
+individual who aren't in the training set so 25%
+
+There are 2457 on the train and 819 in testing
+
+
+```{r}
+
+ptbl_train <- createDataPartition(y=ptbl$Potability, p=0.75, times=1, list=FALSE)
+training <- ptbl[ptbl_train,]
+dim(training)
+testing <- ptbl[-ptbl_train,]
+dim(testing)
+
+```
+
+
+
+We stacked the data and created the plots relating all the variables we have
+
+```{r}
+summary(training)
+
+
+featurePlot(x=training, y = training$Potability,)
+
+```
+
+
+
+## 3 Tree 
+
+
+The use of a decision tree in our project serves to better understand the data, identifying important variables
+
+```{r}
+tree <- rpart(Potability~.,data=training, method = "class")
+prp(tree,extra=1,faclen=5, box.col=c("red","green")[tree$frame$yval])
+```
+
+
+This tree give us a lot of informations. In fact we can see our model follow 
+specific conditions:
+1st condition depending on sulfate: if sulfate <259 the water is prédicted 
+not patable with 49 who are really not patable and 17 who are potable so with wrong prediction.
+If sulfate >= 259 then we go to next condition who is Sulfate <409. And we follow
+the tree to know if the water potability prédiction détermined by the tree structure
+Based on the distribution of the tree we can think Sulfate is the variable who
+is the most importante.
+
+To verify this supposition we check forvariables importance on the tree
+
+
+```{r}
+tree$variable.importance
+barplot(tree$variable.importance, horiz = TRUE, col = "purple")
+```
+
+
+This graph give the importance of each variable. We can see the most importante is Sulfate like our assumption. 
+We also can see Sulfate importance =37 and if we add all the other variables importance we are near to 37 so we can said Sulfate determine for a very big part of our model like approximately 50% of the model. 
+We can also see on the graph Turdibity for example as a very small impact on our model and we we could expect this because the variable is not even in the tree
+
+
+
+
+
+
+This graph is the comparison between the variable ph and Sulfate because they are
+the most impactful variable to determine if the water is potable or not
+
+```{r}
+qplot(ph, Sulfate, data=training)
+
+```
+
+
+
+Next, we test correlation between the 2 variables
+```{r}
+ 
+cor.test(ptbl$ph,ptbl$Sulfate)
+
+```
+
+The results show that the correlation is not significant (p-value is large 0.4026).
+
+
+
+
+We compute the prediction with our data test and after that we're able to compute 
+the confusion matrix. Confusion matrix allow to asses the precision and accuracy of 
+our supervised classification.
+
+```{r}
+
+tree_prediction <- predict(tree, testing, type="class")
+confusionMatrix(as.factor(testing$Potability),tree_prediction)
+```
+
+
+According to the confusion matrix, there were 502 correct predictions and 317
+wrong prediction. The accuracy is about 61.29%
+
+The true Negative Rate (TNR), specificity:
+TN/(TN + FN) = 80/(80 +73) = 0.5229
+
+The True Postive Rate (TPR), sensitivity
+TP/(TP + FP) = 422/(422 + 244) = 0.6336
+
+The accuracy:
+TP + TN/ TP +TN +FP +FN = 0.6129 
+
+
+
+## 4 Random Forest 
+
+
+The random forest algorithm creates multiple decision trees using different subsets of the data and averages their predictions to improve accuracy and prevent overfitting. It highlights the most important variables contributing to the model's predictions by assessing their impact across all trees.
+
+
+For this method, we train it on training, then we predict thanks to this training 
+on testing and we compare.
+
+
+```{r}
+
+training_complete <- na.omit(training)
+randomf1 <- randomForest(as.factor(training_complete$Potability) ~ ., data = training_complete)
+randomf1_pred <- predict(randomf1, testing, type="response")
+
+importance(randomf1)
+```
+
+A higher value means that the feature contributes more to reducing uncertainty
+about class labels, and is therefore more important.
+So this give usthe importance of each variable in the creation of the tree
+Sulfate and PH have the mean decrease Gini higher so there are the most importante variables.
+
+
+
+
+```{r}
+confusionMatrix(as.factor(testing$Potability),randomf1_pred)
+
+plot(c(1:819), testing$Potability, col ="green")
+
+```
+We estimated a model with a better accuracy than the previous one (69%).
+The sensitivity and specificity is narrow the same.
+ 
+The graph give us the distribution of the prediction of
+the variable potability for our group test.
+
+
+
+## 5. Logit Model
+
+We did another model, the logit one. The logit model, is a supervised machine learning algorithm used for binary classification tasks. It estimates the probability that a given input belongs to a certain class by applying the logistic function to a linear combination of the input features.
+
+
+```{r include=FALSE}
+logit_model <- glm(Potability ~ ., data=training, family=binomial(link="logit"))
+predictions <- predict(logit_model, testing, type = "response")
+predictions
+```
+
+```{r}
+datapr = as.numeric(predictions>0.75)
+reference = testing$Potability
+confusionMatrix(as.factor(datapr), as.factor(reference))
+
+```
+
+The model predict 0 for each result so all the water to be . This model is not 
+good because we predict for all individuals 0. We can see the accuracy is very low 59%
+Maybe something is wrong ? We dont take this model as a reference to explain our study.
+
+
+
+## 6. Tree Nnet
+
+The TreeNet model combines decision trees and neural networks to leverage the strengths of both techniques. It uses decision trees to handle non-linear relationships and interactions, while neural networks refine these predictions for improved accuracy in classification tasks.
+
+```{r include=FALSE}
+treeNnet <- nnet(Potability ~ ., data=training, size=2)
+
+```
+
+```{r include=FALSE}
+nn_prob <- predict(treeNnet, testing, type="raw")
+nn_prob
+```
+
+```{r}
+data = as.numeric(nn_prob>0.5)
+reference = testing$Potability
+confusionMatrix(as.factor(data), as.factor(reference))
+```
+
+The model predict 0 for each result so all the water to be . This model is not 
+good because we predict for all individuals 0. We can see the accuracy is very low 58.73%
+
+
+
+##7 A new to asses mising values
+
+For now we're testing a model with droping all observations where there is missing values.
+Indeed, our approach involve dropping observations with missing values, have reduced the dataset's overall size and affected model performance. More sophisticated imputation techniques could yield better results
+
+```{r}
+training2 <- na.omit(training)
+testing2 <- na.omit(testing)
+```
+ 
+We did it again a tree and a confusion matrix...
+ 
+```{r}
+tree <- rpart(Potability~.,data=training2, method = "class")
+prp(tree,extra=1,faclen=5, box.col=c("red","green")[tree$frame$yval])
+```
+
+
+```{r}
+tree_prediction2 <- predict(tree, testing, type="class")
+confusionMatrix(as.factor(testing$Potability),tree_prediction2)
+
+```
+
+This model gave us  a bit lower accuracy than first one. 
+
+
+
+
+
+## 8. Conclusion and limits
+
+
+In summary, our study aimed to predict water potability using various machine learning models. We explored decision trees, random forests, logistic regression, and TreeNet models, identifying sulfate and pH as significant predictors.
+
+Some models, like logistic regression and TreeNet, showed poor performance, indicating potential issues with model choice or parameter settings. Further tuning and optimization are required.
+The study did not explore advanced feature machine learning techniques that could potentially improve the models predictive power.
+The dataset's size and the presence of missing or noisy data may have impacted the accuracy and generalizability of our models. Also, our study did not explicitly address the presence of outliers in the dataset. Outliers can skew the results and affect the accuracy of the models, potentially leading to biased predictions. Detecting and appropriately handling outliers could improve the robustness and reliability of our models.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
